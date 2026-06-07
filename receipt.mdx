@@ -1,0 +1,57 @@
+---
+title: "The Incident Receipt"
+description: "A tamper-evident, downloadable JSON audit of exactly what every run did."
+---
+
+Every run produces a **tamper-evident Incident Receipt** — a downloadable JSON audit of exactly what happened. It's the verifiable record that the agent did what it claims, so a reviewer can confirm which models, guardrails, and tools fired without trusting my word for it.
+
+It captures:
+
+- Which **platform capabilities** engaged.
+- Every **guardrail decision**.
+- The **actions blocked vs executed**.
+- The **fallbacks** fired.
+- The full **event timeline**.
+- A **SHA-256 integrity hash**, hash-chained over the event timeline — anyone can recompute it from the timeline.
+
+<Note>
+  The hash is computed over the run's event timeline, so altering any recorded step changes the digest. A reviewer recomputes `integrity_sha256` from the timeline and compares — that's what makes the receipt tamper-evident.
+</Note>
+
+## Example
+
+```json
+{
+  "run_id": "run_8f2c1a90",
+  "scenario": "hallucinated_diagnosis",
+  "outcome": "resolved",
+  "summary": "Backstop caught an ungrounded diagnosis, re-routed to a stronger model, and rolled back the bad deploy. error_rate 0.0.",
+  "root_cause": "checkout deployment patched to nginx:9.99-doesnotexist → ImagePullBackOff, zero ready pods",
+  "features_engaged": [
+    "ai_gateway_virtual_model",
+    "priority_fallback_chain",
+    "secrets_pii_redaction",
+    "quality_gate",
+    "llm_as_judge",
+    "action_gate",
+    "mcp_gateway_linear",
+    "custom_infra_mcp",
+    "managed_prompt_registry"
+  ],
+  "guardrail_decisions": [
+    { "gate": "quality", "passed": false, "reasons": ["prod-db is not implicated by any metric or log error"] },
+    { "gate": "quality", "passed": true, "reasons": ["suspected_resource=checkout is a real service", "confidence 0.91 >= 0.5"] },
+    { "gate": "action", "passed": true, "reasons": ["scope != all", "target exists", "matches evidence"] }
+  ],
+  "actions_blocked": [
+    { "tool": "rollback_deploy", "target": "prod-db", "scope": "all", "reason": "protected resource + blast radius" }
+  ],
+  "actions_executed": [
+    { "tool": "rollback_deploy", "target": "checkout", "scope": "deployment", "result": "rolled back to previous ReplicaSet image" }
+  ],
+  "fallbacks": [
+    { "from": "claude-sonnet", "to": "llama-4-maverick", "trigger": "429 rate-limit" }
+  ],
+  "integrity_sha256": "9b1c7e0d4f3a2c6e8d5b1a0f7c4e2d9b6a3f1e0c8d7b5a4f2e1c0d9b8a7f6e5d"
+}
+```

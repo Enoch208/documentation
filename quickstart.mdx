@@ -1,47 +1,52 @@
 ---
-title: "Quickstart"
-description: "Begin with a guide on the fastest path to a successful outcome"
+title: "Run it locally"
+description: "From zero to a live incident on a real kind cluster."
 ---
 
-Describe how someone begins using your product. What is the first thing they need to do? Are there any prerequisites?
-
-A quickstart should take someone from zero to using your product. They'll get a quick win and a sense of what they can accomplish.
-
-## Prerequisites
-
-Before you begin, you must have:
-
-- Requirement one (for example, Node.js 18+, a free account, an API key)
-- Requirement two (for example, a compatible device, a compatible browser, a compatible operating system)
-
-## Get started
+**Prerequisites:** Docker, `kind`, `kubectl`, `uv`, Node 20+.
 
 <Steps>
-  <Step title="Install">
-    Describe how to install your product or sign up.
+  <Step title="Stand up the sandbox cluster">
+    A local `kind` cluster with two namespaces — `backstop-naive` and `backstop-hardened` — each running a `checkout` deployment and a protected `prod-db`.
 
     ```bash
-    npm install your-package
+    kind create cluster --name backstop
+    for ns in backstop-naive backstop-hardened; do
+      kubectl create namespace "$ns"
+      kubectl apply -n "$ns" -f backend/k8s/app.yaml
+    done
     ```
   </Step>
-  <Step title="Configure">
-    Describe any setup or configuration needed before first use.
+  <Step title="Start the backend (uv)">
+    Three services: the run API, the custom guardrail endpoints, and the read-only infra MCP server.
 
     ```bash
-    your-cli init
+    cd backend
+    cp .env.example .env        # fill in gateway + Bedrock config
+    uv sync
+    uv run uvicorn backstop.api:app --port 8033
+    uv run uvicorn backstop.guardrails.server:app --port 8133
+    uv run python -m backstop.infra_mcp
     ```
   </Step>
-  <Step title="Run it">
-    Show the first thing a user does to see it working.
-
+  <Step title="Start the frontend (npm)">
     ```bash
-    your-cli start
+    cd frontend && npm install && npm run dev   # http://localhost:3033/run
     ```
+  </Step>
+  <Step title="Trigger an incident">
+    Open the console, hit **Trigger incident**, and watch the two agents diverge — the naive one takes `prod-db` to zero, Backstop catches the bad output, re-routes, and heals to `error_rate = 0.0`.
   </Step>
 </Steps>
 
-<Tip>
-  Give people a way to get help. This could be a link to a support page, a chat with a customer support agent, or a forum for your product.
+## Key env flags
 
-  Example: Need help? Reach out to us at [support@yourcompany.com](mailto:support@yourcompany.com).
+| Flag | Effect |
+|---|---|
+| `BACKSTOP_LIVE=true` | Use the live model on the gateway for re-diagnosis on the re-route and recovery. |
+| `BACKSTOP_LLM_JUDGE=true` | Enable the independent LLM-as-judge in the quality gate. |
+| `BACKSTOP_BACKEND=kind` | Drive the real `kind` cluster (the `K8sBackend`) instead of the deterministic mock. |
+
+<Tip>
+  Run the test suite with `cd backend && uv run pytest` — 60 passing in ~2s, fully network-isolated.
 </Tip>

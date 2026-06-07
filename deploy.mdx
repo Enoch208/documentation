@@ -1,0 +1,32 @@
+---
+title: "How I deployed it"
+description: "Backend on a VPS, fixed ports under pm2, exposed via a Cloudflare tunnel."
+---
+
+I host the backend on a VPS so the custom guardrails and custom MCP server have stable HTTPS URLs the gateway can reach.
+
+The three backend services bind to localhost on **fixed ports** under **pm2**:
+
+| Service | Port |
+|---|---|
+| Run API | `8033` |
+| Custom guardrails | `8133` |
+| Custom infra MCP | `8233` |
+
+They're exposed through a **Cloudflare tunnel** — TLS terminated at the edge, so there's no inbound 80/443 needed and no clash with the box's existing nginx.
+
+<Note>
+  The Cloudflare tunnel is why there's no nginx-on-80/443 conflict: nothing binds the public ports on the box, the tunnel reaches the localhost ports directly.
+</Note>
+
+## Wiring it to the platform
+
+The guardrail group's custom check and the `backstop-infra` MCP server are registered in TrueFoundry against those public HTTPS URLs.
+
+## The `deploy/` folder
+
+`deploy/` has everything needed to reproduce the deployment:
+
+- `setup.sh` — the setup script.
+- `ecosystem.config.js` — the pm2 process definitions.
+- the **cloudflared** and **nginx** configs.

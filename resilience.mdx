@@ -1,0 +1,36 @@
+---
+title: "Resilience"
+description: "Every failure mode mapped to a concrete defense — plus the one-click demo scenarios."
+---
+
+Infrastructure fails. Rate limits hit. Timeouts happen. Providers go down. An agent with real remediation power has to survive all of that — and Backstop does. But the failure that actually takes systems down is subtler: a **confident, plausible, wrong** model output.
+
+## The failure taxonomy
+
+| Failure mode | How Backstop handles it |
+|---|---|
+| **Rate limits** | Priority fallback chain — a `429` fails over to the next model automatically; a rate-limit policy makes it observable on demand. |
+| **Model / provider outage** | The same chain: Sonnet → Llama → Nova → Haiku, with retry/fallback on auth/timeout/5xx. |
+| **Slow responses** | Gateway-level routing + timeouts fail over instead of hanging. |
+| **Tool failures** | Caught per call; the run degrades to a human hand-off with full context. |
+| **Bad intermediate outputs** | The quality gate — rules **plus** an LLM-as-judge — catches ungrounded diagnoses and re-routes. The headline defense. |
+| **Cascading errors** | An anomaly-budget **circuit breaker** trips and escalates instead of amplifying the cascade. |
+| **Destructive actions** | The action gate + scoped tools make a catastrophic write structurally unreachable. |
+| **Malformed failover output** | The balanced-JSON extractor parses any model's formatting, so a provider switch never corrupts a diagnosis. |
+| **Cost blow-ups** | A cheap judge model, a budget policy, and a loop cap bound spend. |
+
+## Demo scenarios
+
+The `/run` console has a **scenario bar** that injects any failure mode with one click and lets you watch a *different* defense fire.
+
+| Scenario | What fires |
+|---|---|
+| **Hallucinated diagnosis** | quality gate + LLM-as-judge catch the wrong output → re-route → resolve |
+| **Cascading failure** | a diagnosis that stays wrong → circuit breaker trips → escalate |
+| **Clean signal** | a grounded diagnosis → every gate passes → resolve (proves no false-positives) |
+| **Tool failure** | the cluster API fails mid-action → the naive agent crashes, Backstop catches it and escalates |
+| **Model failover** | the gateway fails the primary over to the next model, live |
+
+<Warning>
+  **A note on the failure I inject — and what's honest about it.** This is controlled fault injection, the way you'd run a chaos experiment. The cluster break is real, and so is the remediation. The *poisoned diagnosis* (the "restart prod-db" hallucination) I inject deterministically so both agents face the **identical bad intermediate output** — that's the variable I'm isolating, and it makes the guardrail's catch reproducible on every run rather than something I have to hope the model does on camera. With `BACKSTOP_LIVE=true`, the re-diagnosis on the re-route, the LLM-as-judge, and the recovery all run against the live model on the gateway; only the first deliberately-bad output is scripted. The point isn't "watch the model hallucinate" — it's "watch what happens to a wrong output *when* it occurs."
+</Warning>

@@ -1,0 +1,45 @@
+---
+title: "Guardrails"
+description: "Defense-in-depth: redaction in, groundedness and blast-radius checks out, a circuit breaker around it all."
+---
+
+<Note>
+  The groundedness, blast-radius and justification checks run **in the agent** as pure, unit-tested functions, backed by the LLM-as-judge — so a wrong output can't reach the cluster even if a platform check is lenient. These in-agent gates are the core fail-safe logic; the platform guardrails are defense-in-depth around them.
+</Note>
+
+## PII / secret redaction
+
+Before the model ever sees the gathered logs, I mask secrets and PII. The cluster signals deliberately include a leaked `postgres://…` credential line so you can watch this work. On the platform side this is the native **Secrets Detection** + **PII/PHI** guardrails running in *mutate* mode on the **LLM Input** hook, masking credentials/tokens/PII pre-prompt.
+
+## The quality gate (groundedness)
+
+Rule-based groundedness validates the structured `Diagnosis` field-by-field:
+
+- `suspected_resource` must be a **real service**.
+- `suspected_deploy_sha` must be a **real recent deploy**.
+- `confidence` must be **≥ 0.5**.
+
+A failure re-routes to a stronger model and re-diagnoses rather than acting.
+
+## The LLM-as-judge
+
+Rule checks catch structural problems; an independent judge call *reasons* about whether the action is actually justified by the evidence. On the live cluster it returned:
+
+> "all signals point to an ImagePullBackOff… prod-db is not implicated by any metric or log error,"
+
+rejecting the hallucination in plain English. It's resilient (errors never block), runs a cheap judge model to bound cost, and is gated behind the `BACKSTOP_LLM_JUDGE` flag.
+
+## The action-validation gate
+
+`check_action` runs before any write — it's the real differentiator. As pure, deterministic, testable functions it enforces:
+
+- **Blast radius** — reject `scope=all`.
+- **Protected resources** — reject `prod-db` and `payments`.
+- **Target exists** — confirm the action's target is real.
+- **Matches evidence** — confirm the action matches the diagnosis.
+
+A failure blocks and escalates to a human; the destructive action simply never runs.
+
+## The cascade circuit breaker
+
+An **anomaly budget** tracks failures across a run. Once it trips, the agent halts autonomous action and escalates instead of amplifying a cascade.
