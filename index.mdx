@@ -3,6 +3,8 @@ title: "Backstop"
 description: "An on-call SRE incident agent that fails safe, not just stays up."
 ---
 
+<img src="/images/cover.png" alt="Backstop — fails safe, not just stays up" noZoom />
+
 Most "resilient agent" designs answer one question: _what happens when the model goes down?_ Backstop answers the harder one — **what happens when the model is up, confident, and _wrong_, and the agent is about to act on it?**
 
 A hallucinated deploy SHA. A rollback scoped to *everything*. A "restart" pointed at the production database. The most capable model still does this, and an agent that executes blindly turns a bad token into an outage. So I treated *"the model is wrong"* as a first-class failure mode, sitting right next to *"the model is down."* Every design decision exists to make a wrong output **safe**.
@@ -18,6 +20,10 @@ A Python triage agent that diagnoses and remediates a live incident on a **real 
 5. **Notifies** on-call and opens an incident ticket through governed (MCP) tool access.
 
 I run it on a **local `kind` cluster with two namespaces** (`backstop-naive`, `backstop-hardened`). The same alert hits two agents: the naive one acts on a hallucinated diagnosis and takes the production database to zero; **Backstop** gets the exact same bad output, catches it with an LLM-as-judge, re-routes to a stronger model, rolls the bad deploy back — ending at `error_rate = 0.0`, with a tamper-evident receipt of every step.
+
+<Frame caption="The live incident console — inject any failure mode and watch the naive agent and Backstop diverge.">
+  <img src="/images/dashboard.png" alt="Backstop incident console" />
+</Frame>
 
 ## Explore
 

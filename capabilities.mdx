@@ -1,0 +1,42 @@
+---
+title: "Platform capabilities"
+description: "Every TrueFoundry and AWS Bedrock capability Backstop uses — and where it lives."
+---
+
+Backstop is built to exercise the **full TrueFoundry AI Gateway surface over AWS Bedrock** — not one feature deeply, but the whole platform, end to end. Every capability below is wired through the platform and verifiable in a run; none is faked.
+
+## At a glance
+
+| Capability | How Backstop uses it | Where |
+|---|---|---|
+| **AI Gateway** | Every diagnosis call routes through the gateway via the OpenAI SDK pointed at the gateway base URL. | `prod-triage` virtual model |
+| **Virtual Models — priority fallback** | One virtual model with a four-hop chain: **Claude Sonnet → Llama 4 Maverick → Amazon Nova Pro → Claude Haiku**, with retry/fallback on `401/403/404/408/429/5xx`. | gateway config |
+| **Rate-limit policy** | A limit on the primary target so a live run visibly fails Sonnet over to Llama. | gateway policy |
+| **Budget / cost policy** | A daily spend cap across the chain. | gateway policy |
+| **Observability** | `X-TFY-LOGGING-CONFIG` on every call → request traces, fallback events, and per-model cost in AI Monitoring. | gateway |
+| **MCP Gateway — official remote MCP** | On resolution, the agent files an incident ticket in **Linear** through a curated virtual MCP server. | `backstop-notify` |
+| **MCP Gateway — custom MCP server** | A read-only "infra" MCP server exposes live cluster signals (`get_signals`, `deployment_status`, `namespaces`) over streamable-http. | `backstop-infra` |
+| **MCP — tool scoping / toggling** | Destructive Linear tools are toggled off; only ticket creation is exposed. | virtual MCP |
+| **Guardrails — native** | **Secrets Detection** + **PII/PHI** redaction on the input hook, masking credentials before the model sees them. | input hook |
+| **Guardrails — custom** | A hosted guardrail validates the model's diagnosis on the output hook. | output hook · `/tfy/quality` |
+| **Prompts registry** | The diagnosis system prompt is versioned in the registry and fetched at runtime (with a local fallback). | prompt FQN |
+| **AWS Bedrock** | Foundation models (Claude, Llama, Nova) served through Bedrock's managed inference, proxied by the gateway. | provider |
+
+## What this demonstrates
+
+<CardGroup cols={2}>
+  <Card title="AI Gateway" icon="bolt">
+    Routing, the priority fallback chain, rate-limit and budget policies, and full request tracing in AI Monitoring.
+  </Card>
+  <Card title="MCP Gateway" icon="plug">
+    Scoped, audited tool access — an official remote MCP (Linear) and a custom read-only infra MCP, with destructive tools removed.
+  </Card>
+  <Card title="Guardrails" icon="shield-halved">
+    Native Secrets + PII redaction on the way in, a custom groundedness check on the way out, plus in-agent gates that block destructive actions.
+  </Card>
+  <Card title="Auditability" icon="receipt">
+    Every run emits a tamper-evident receipt — every model, fallback, guardrail decision, and action, with a recomputable hash.
+  </Card>
+</CardGroup>
+
+In-agent logic — the groundedness and action gates, the LLM-as-judge, and the cascade circuit breaker — sits on top of the platform as defense-in-depth. See [Guardrails](/guardrails) and [Resilience](/resilience).

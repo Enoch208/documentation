@@ -15,7 +15,7 @@
     "pages": [
       {
         "group": "Overview",
-        "pages": ["index", "quickstart"]
+        "pages": ["index", "capabilities", "quickstart"]
       },
       {
         "group": "How it works",
